@@ -1,52 +1,146 @@
+
 import os
 import sys
 import pandas as pd
 import joblib
+
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
-# 1. Load data (file isi folder mein honi chahiye jahan train.py hai)
+
+# --------------------------------------------------
+# 1. Load the Dataset
+# --------------------------------------------------
+
+# Get the directory where this script is located
 base_dir = os.path.dirname(os.path.abspath(__file__))
 csv_path = os.path.join(base_dir, "diabetes.csv")
 
+# Check whether the dataset file exists
 if not os.path.exists(csv_path):
-    sys.exit("Error: diabetes.csv nahi mili. Use train.py wale folder mein rakhiye.")
+    sys.exit(
+        "Error: diabetes.csv was not found. "
+        "Please place it in the same directory as train.py."
+    )
 
+# Read the dataset
 df = pd.read_csv(csv_path)
 
-# Column ke naam se extra space hata do
+# Remove unnecessary spaces from column names
 df.columns = df.columns.str.strip()
 
-# Zaruri columns check karo
-required = ["Pregnancies", "Glucose", "BloodPressure", "SkinThickness",
-            "Insulin", "BMI", "DiabetesPedigreeFunction", "Age", "Outcome"]
-missing = [c for c in required if c not in df.columns]
-if missing:
-    sys.exit(f"Error: ye columns file mein nahi mile: {missing}\nMilne wale columns: {list(df.columns)}")
 
-# 2. Fix zero values (they mean "missing")
-cols = ["Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"]
-for c in cols:
-    median_value = df.loc[df[c] != 0, c].median()  # zero ko chhod kar median
-    df[c] = df[c].replace(0, median_value)
+# --------------------------------------------------
+# 2. Validate Required Dataset Columns
+# --------------------------------------------------
 
-# 3. Split into input (X) and answer (y)
+required_columns = [
+    "Pregnancies",
+    "Glucose",
+    "BloodPressure",
+    "SkinThickness",
+    "Insulin",
+    "BMI",
+    "DiabetesPedigreeFunction",
+    "Age",
+    "Outcome"
+]
+
+missing_columns = [
+    column for column in required_columns
+    if column not in df.columns
+]
+
+if missing_columns:
+    sys.exit(
+        f"Error: The following required columns are missing: "
+        f"{missing_columns}\n"
+        f"Available columns: {list(df.columns)}"
+    )
+
+
+# --------------------------------------------------
+# 3. Handle Missing or Invalid Zero Values
+# --------------------------------------------------
+
+# In these medical measurements, zero may represent a missing value.
+# Replace such values with the median of the available non-zero values.
+
+columns_to_impute = [
+    "Glucose",
+    "BloodPressure",
+    "SkinThickness",
+    "Insulin",
+    "BMI"
+]
+
+for column in columns_to_impute:
+
+    median_value = df.loc[df[column] != 0, column].median()
+
+    if pd.isna(median_value):
+        sys.exit(
+            f"Error: Cannot calculate a valid median for {column}."
+        )
+
+    df[column] = df[column].replace(0, median_value)
+
+
+# --------------------------------------------------
+# 4. Separate Features and Target Variable
+# --------------------------------------------------
+
+# Features contain the input variables.
+# Outcome is the target variable to be predicted.
+
 X = df.drop("Outcome", axis=1)
 y = df["Outcome"]
 
+
+# --------------------------------------------------
+# 5. Split the Dataset into Training and Testing Sets
+# --------------------------------------------------
+
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
+    X,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
 )
 
-# 4. Train
-model = RandomForestClassifier(n_estimators=100, random_state=42)
+
+# --------------------------------------------------
+# 6. Initialize and Train the Random Forest Model
+# --------------------------------------------------
+
+model = RandomForestClassifier(
+    n_estimators=100,
+    random_state=42
+)
+
 model.fit(X_train, y_train)
 
-# 5. Test
-accuracy = accuracy_score(y_test, model.predict(X_test))
-print("Accuracy:", round(accuracy * 100, 2), "%")
 
-# 6. Save (isi folder mein model.pkl banega)
-joblib.dump(model, os.path.join(base_dir, "model.pkl"))
-print("model.pkl save ho gayi.")
+# --------------------------------------------------
+# 7. Evaluate Model Performance
+# --------------------------------------------------
+
+y_pred = model.predict(X_test)
+
+accuracy = accuracy_score(y_test, y_pred)
+
+print(f"Model Accuracy: {accuracy * 100:.2f}%")
+
+
+# --------------------------------------------------
+# 8. Save the Trained Model
+# --------------------------------------------------
+
+model_path = os.path.join(base_dir, "model.pkl")
+
+joblib.dump(model, model_path)
+
+print("Model training completed successfully.")
+print(f"Trained model saved at: {model_path}")
